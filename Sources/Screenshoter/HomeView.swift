@@ -33,7 +33,7 @@ struct HomeView: View {
                     Text("A little capture.\nA clearer point.")
                         .font(.system(size: 34, weight: .semibold)).tracking(-1.3).lineSpacing(0)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("Grab a region, add your thoughts,\nand get back to what you were doing.")
+                    Text("Grab a region. It’s copied instantly.\nClick the preview to add your thoughts.")
                         .font(.system(size: 13)).foregroundStyle(Theme.secondary).lineSpacing(5)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 5) {

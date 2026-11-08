@@ -16,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var previousApplication: NSRunningApplication?
     private var captureTask: Task<Void, Never>?
     private var captureGeneration = UUID()
+    private lazy var capturePreview = CapturePreviewController { [weak self] document in
+        self?.showEditor(document)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UserDefaults.standard.register(defaults: ["includeCursor": false, "closeAfterCopy": true, "showWelcomeOnLaunch": true])
@@ -43,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         shortcut.unregister()
         captureTask?.cancel()
+        capturePreview.dismiss()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -149,6 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard NSApp.modalWindow == nil, !NSApp.windows.contains(where: { $0.attachedSheet != nil }) else {
             NSSound.beep(); return
         }
+        capturePreview.dismiss()
         state.hasPermission = CGPreflightScreenCaptureAccess()
         guard state.hasPermission else { requestPermission(); return }
         state.isCapturing = true
@@ -187,11 +192,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func finishSelection(snapshot: DisplaySnapshot, rect: CGRect) {
+        guard state.isCapturing else { return }
         do {
             let document = try ScreenCaptureService.crop(snapshot.image, displaySize: snapshot.screen.frame.size, selection: rect)
+            var copyError: Error?
+            do { try ImageExporter.copy(document) }
+            catch { copyError = error }
             dismissOverlays()
             restoreWindows()
-            showEditor(document)
+            restorePreviousApplication()
+            capturePreview.show(document, on: snapshot.screen, copyError: copyError)
         } catch {
             cancelCapture()
             NSAlert(error: error).runModal()
@@ -200,6 +210,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func dismissOverlays() {
         captureGeneration = UUID()
+        captureTask?.cancel()
+        captureTask = nil
         overlays.forEach { $0.orderOut(nil); $0.close() }
         overlays.removeAll()
         state.isCapturing = false
@@ -213,13 +225,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func cancelCapture() {
         dismissOverlays()
         restoreWindows()
+        restorePreviousApplication()
+    }
+
+    private func restorePreviousApplication() {
         previousApplication?.activate()
         previousApplication = nil
     }
 
     @objc private func displaysChanged() {
+        capturePreview.reposition()
         guard state.isCapturing else { return }
-        captureTask?.cancel()
         cancelCapture()
     }
 
